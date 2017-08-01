@@ -1,0 +1,19 @@
+
+
+This is a bochs test packet for linux 0.1x system. 
+You must use Bochs 2.x to run this packet.When you, 
+just make a sub directory 'linux-0.1x' in the bochs 
+main directory and copy the text file 'bochsrc.txt' 
+to the bochs main directory.
+
+Note: Before copy, backup your own bochsrc.txt file.
+
+Note2: This system was easy to run into PANIC. 
+       Use at your own risk!
+       
+       Zhao Jiong
+       2004.1.4
+       gohigh@sh163.net
+       
+
+

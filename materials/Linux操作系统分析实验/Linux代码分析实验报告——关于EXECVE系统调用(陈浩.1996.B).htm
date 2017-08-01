@@ -1,0 +1,931 @@
+<html>
+
+<head>
+<title>Linux原代码分析 </title>
+</head>
+
+<body>
+
+<p><font FACE="宋体" SIZE="2">　</p>
+
+<p></font><font face="宋体" size="7"> 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </font><font FACE="隶书" SIZE="6"> 
+Linux代码分析实验报告 </font><font FACE="宋体" size="4">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ----关于EXECVE系统调用 
+ </font><font FACE="宋体" SIZE="7"></p>
+
+<p></font><font FACE="宋体" SIZE="5" COLOR="#0000ff"><i>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 962班 <b>陈浩 </b>（学号：9630043）</i></font><font FACE="宋体" SIZE="5"></p>
+
+<p>一 <font FACE="隶书" SIZE="6">简介(Introdution):&nbsp;<br>
+</font>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;<strong>&nbsp;</font><font FACE="宋体" size="4">1</strong>，<strong>进程（process)</strong>: &nbsp;&nbsp; 
+在多道程序批处理系统和分时系统中，程序并不能独立运行。作为资源分配和运行的基本单位是进程。操做系统所具有的四大特征也都是基于进程而形成的。进程对于操做系统具有特别重要的意义。进程是程序的一个执行过程，其运动性质是由其自身的状态变化决定的。通常在操作系统中，进程至少有三种基本状态：运行态，就绪态，等待态。Linux 
+是一个多任务的分时操作系统</font><font FACE="宋体" SIZE="5">， </font><font FACE="宋体" size="4">在<strong>Linux </strong>中进程被分为如下状态<strong>：Running, 
+&nbsp; Waiting, Stopped, Zombie.</strong> 四种状态。在Linux中，主要的进程的产生之间的关系如下所示：<br>
+<br>
+<br>
+</font><font FACE="宋体" SIZE="5">&nbsp;&nbsp;&nbsp; </font><font FACE="宋体" size="4">init(1)-+-crond(98)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-emacs(387)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-gpm(146) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-inetd(110)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-kerneld(18)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-kflushd(2) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-klogd(87)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-kswapd(3) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-login(160)---bash(192)---emacs(225)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-lpd(121) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-mingetty(161)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-mingetty(162)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-mingetty(163) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-mingetty(164)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-login(403)---bash(404)---pstree(594)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-sendmail(134)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+|-syslogd(78)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+`-update(166)</font><font FACE="宋体" SIZE="5"><font FACE="宋体" SIZE="6"></p>
+</font>
+
+<p>&nbsp;&nbsp;&nbsp; </font><font FACE="宋体" size="4"><strong>2，进程和内存分配（memory 
+management)的关系：</strong>因为一个程序必须首先被放在内存中才能运行，而且对每一进程都要有一相应的进程控制块(PCB),所以每一个进程都必须占用一定的存储空间。但因为真正的 
+physical memory 要比 virtual memory 要小的多，所以操作系统需要对 physical 
+memory 进行最有效的利用。其中的一种办法就是 OS 
+只把那些正被使用着的页调进内存。这种只有在真正需要访问时才把虚页装进内存的技术被称为 
+demand paging.当一个进程试图访问一 virtual address 
+而它当前却不在内存中时，处理器将找不到所须的页表项。这时，处理器将通知操作系统发生了 
+page fault。<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 如果此 faulting virtual address 
+是非法的，这就意味着此进程正试图访问一个不属于它的 virtual 
+address，这表明进程已经出现错误，操作系统为保护其他系统中进程将终止此错误进程。<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 如果 faulting virtual address 
+是合法的但所须的页当前不在内存中，操作系统会把此页从硬盘调进内存中。相对来说，对硬盘的访问需要很长时间，这样此进程就必须</font><font FACE="宋体" size="3">在所</font><font FACE="宋体" size="4">须页被调进内存之前等待相当长的一段时间，如果此时有其它的进程可以运行，操作系统将先让这些进程运行。新调进的页将被写进一个空闲的 
+physical page frame ，并且一个新的关于此 virtual page 的页表项被加进 
+processes page table。然后，此进程被选中以继续运行，运行是从 memory 
+fault 发生时的机器指令开始进行下去的。&nbsp; </font><font FACE="宋体" SIZE="5"></p>
+
+<p></font><font FACE="宋体" size="4">&nbsp;</font><font FACE="宋体" SIZE="5">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp; </font><font FACE="宋体" size="4">Linux 使用 demand paging 
+以把可执行的程序装入进程的 virtual memory。当一个命令被执行时，包含此命令的文件被打开并且它的内容被映射进进程的 
+virtual memory中。通过修改<strong><u> 描述这些进程的数据结构</u><em>（</font><font FACE="宋体" SIZE="5">memory mapping</font><font FACE="宋体" size="4">)</em></strong>,上面所说的映射是很容易做到的。然而，只有可执行文件的第一部分被真正的放进物理内存。文件的其它部分还是在磁盘上。当此文件（进程）执行时，它会造成 
+page faults 的出现，Linux 将根据进程的 memory map 
+决定需要把文件的哪一块调进内存以满足执行的需要。</font><font FACE="宋体" SIZE="5"></p>
+<font FACE="宋体" SIZE="6">
+
+<p></font>&nbsp; </font><font FACE="宋体" size="4">&nbsp; exec系统调用从一个指定的程序重新初始化一个进程，当该进程保持不变时程序却有可能改变。另一方面，fork系统调用是用复制指令，用户数据段和系统数据段的办法创建一个新进程，该进程是一个已存在进程的复制品，而不是从一个程序初始化得来的。 
+</font><font FACE="宋体" SIZE="5"><font FACE="宋体" SIZE="6"></p>
+
+<p align="left"></font><font FACE="宋体" size="4">&nbsp;&nbsp;&nbsp;&nbsp; 没有fork,exec的使用将受到限制；而没有 
+exec, fork也无任何实际使用意义。除了引导Linux 核心自身外，exec 
+系统调用是程续在Linux上获得执行的唯一方式。不仅shell使用 exec 
+执行用户的程序，而且 shell 和他的祖先也是通过 exec 引用的。而 fork 
+系统调用则是创建新进程的唯一方式。&nbsp; </font><font FACE="宋体" SIZE="6"></p>
+</font>
+
+<p><strong>二 Principles</strong></p>
+
+<p>&nbsp;&nbsp;&nbsp; <strong>（一） 结构</strong>：<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </font><font FACE="宋体" size="4">函数 do_execve()主要完成以下步骤：<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<em><strong>1</strong></em>.把页表清 0；<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<em><strong>2</strong></em>.调用函数 open_namei()；&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<em><strong>3</strong></em>.检查此系统调用本身的参数设置是否正确； 
+&nbsp;&nbsp; <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<em><strong>4</strong></em>.调用函数 prepare_binprm();此函数主要完成以下工作 
+：<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+</font><font face="宋体" size="5">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font FACE="宋体" size="4">1.检查文件的类型是否满足执行条件；&nbsp; <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp;2.检查执行权限；<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.检查文件此是否正在被写入（修改）；<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.set user_id, set group_id;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;5.调用 memset() 和 
+read_exec();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<em><strong>5.</strong></em>调用函数 copy_strings();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<em><strong>6</strong></em>.调用 search_binary_handler()，</font><font FACE="宋体" size="3">查找可执行</font><font FACE="宋体" size="4">的文件格式； </font><font FACE="宋体" SIZE="5">&nbsp;</font><font FACE="宋体" size="4"></p>
+</font><font>
+
+<p><strong><big><big>（二） 算法</big></big></font><font FACE="宋体" SIZE="6">：</font> 
+</strong></p>
+
+<blockquote>
+  <blockquote>
+    <blockquote>
+      <font FACE="宋体" size="3"><p></font><font color="#00FF40" face="宋体" size="3">&nbsp;&nbsp;&nbsp;&nbsp; 
+      </font><font face="宋体" size="3" color="#000000">&nbsp;&nbsp; 由于 Linux 是用 
+      comand-loading 算法，所以 do_execve() 
+      实际所做的工作并不多，不需要把所要执行的程序真正的读入内存，而仅仅把所要的代码头设置好，并把进程的状态设置为“就绪”，等待系统的调度，以运行此进程。<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      真正的把代码读入内存，要涉及到较复杂的算法，如在首先要内存中寻找一块足够大的空间，然后再把程序从外存读入此空间中。<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; exec()所做的和内存有关的工作有以下这些：<br>
+      </font>&nbsp; <font face="宋体" size="3">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (1). 内存空间的获取： <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 1 page for exec header entire file for omagic <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 1 page or more for stack (MAX_ARG_PAGES) <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (2).&nbsp;&nbsp; 
+      &nbsp; <tt>clear_page_tables()</tt> used to remove old pages. <br>
+      <tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (3).&nbsp; change_ldt()</tt> 
+      sets the descriptors in the new <tt>LDT[]</tt> <br>
+      <tt>&nbsp;&nbsp; </tt>&nbsp;&nbsp;&nbsp; (4). <tt>ldt[1]</tt> = code base=0x00, 
+      limit=TASK_SIZE <br>
+      <tt>&nbsp;&nbsp; </tt>&nbsp;&nbsp;&nbsp; (5).&nbsp; <tt>ldt[2]</tt> = data base=0x00, 
+      limit=TASK_SIZE<br>
+      &nbsp;&nbsp;&nbsp;&nbsp; These segments are DPL=3, P=1, S=1, G=1. type=a (code) or 2 
+      (data) <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (6).&nbsp; Up to <tt>MAX_ARG_PAGES</tt> 
+      dirty pages of argv and envp are allocated and stashed at the top of the data segment for 
+      the newly created user stack.</font></p>
+      <p><font FACE="宋体" size="3">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (7).&nbsp; 
+      Set the instruction pointer of the caller <tt>eip = ex.a_entry</tt> <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (8).&nbsp; Set the stack pointer of the 
+      caller to the stack just created (esp = stack pointer) These will be popped off the stack 
+      when the caller Resumes. <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (9).&nbsp; update memory limits<br>
+      <tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      end_code = ex.a_text</tt><br>
+      <tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      end_data = end_code + ex.a_data</tt><br>
+      <tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+      brk = end_data + ex.a_bss</tt> </p>
+      </font>
+    </blockquote>
+  </blockquote>
+  <blockquote>
+    <font FACE="宋体" size="3"><p>Interrupts and traps 
+    是在当前任务的环境中被处理的。特别的，地址的转换是用当前任务的页目录进行的。然而，段却是用的内核的。这样，所有的线形地址都指向 
+    &nbsp; kernel memory。<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </p>
+  </blockquote>
+</blockquote>
+
+<p><strong><font FACE="隶书" SIZE="5">三 代码分析(Code analysis)</font></strong></p>
+
+<blockquote>
+  <blockquote>
+    <p></font><font face="宋体" size="3" color="#000000">&nbsp;&nbsp;&nbsp;&nbsp; 
+    函数首先定义了一个结构变量：struct linux_binprm bprm，用以存放一些将要被执行的程序的参数值，然后程序调用 
+    open_namei 
+    函数打开文件（。。。。）然后程序检查参数堆栈的设置是否正确.</font><font FACE="宋体" size="3"><font color="#00FF40"><br>
+    </font><font color="#8000FF">/* this function is from file linux/fs/exec.c */ </font><br>
+    </font><font FACE="宋体" COLOR="#007f7f" size="3">/* sys_execve() executes a new 
+    program. */ <br>
+    <br>
+    <strong>int do_execve(char * filename, char ** argv, char ** envp, struct pt_regs *regs)<br>
+    { <br>
+    &nbsp;&nbsp;&nbsp; struct linux_binprm bprm;<br>
+    &nbsp;&nbsp;&nbsp; int retval;<br>
+    &nbsp;&nbsp;&nbsp; int i;<br>
+    &nbsp;&nbsp;&nbsp; bprm.p = PAGE_SIZE*MAX_ARG_PAGES-sizeof(void *);<br>
+    &nbsp; <br>
+    &nbsp; /* clear page-table */&nbsp;&nbsp;&nbsp;<br>
+    &nbsp; for (i=0 ; i&lt;MAX_ARG_PAGES ; i++) 
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp; 
+    bprm.page[i] = 0;<br>
+    &nbsp;&nbsp; retval = open_namei(filename, 0, 0, &amp;bprm.inode, NULL);<br>
+    &nbsp;&nbsp;&nbsp; if (retval) <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return retval;<br>
+    &nbsp;&nbsp;&nbsp; bprm.filename = filename; <br>
+    &nbsp;&nbsp;&nbsp; bprm.sh_bang = 0;<br>
+    &nbsp;&nbsp;&nbsp; bprm.loader = 0; <br>
+    &nbsp;&nbsp;&nbsp; bprm.exec = 0; <br>
+    &nbsp;&nbsp;&nbsp; bprm.dont_iput = 0;<br>
+    &nbsp;&nbsp;&nbsp; if ((bprm.argc = count(argv)) &lt; 0)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return bprm.argc;<br>
+    &nbsp;&nbsp;&nbsp; if ((bprm.envc = count(envp)) &lt; 0) <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return bprm.envc;<br>
+    &nbsp;&nbsp;&nbsp; retval = prepare_binprm(&amp;bprm); <br>
+    &nbsp;&nbsp;&nbsp; if(retval&gt;=0) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; bprm.p = 
+    copy_strings(1,&amp;bprm.filename, bprm.page, bprm.p, 2);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; bprm.exec = bprm.p;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; bprm.p = 
+    copy_strings(bprm.envc,envp,bprm.page, bprm.p,0);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </font><font FACE="宋体" size="4" COLOR="#007f7f">bprm.p = copy_strings(bprm.argc,argv,bprm.page, 
+    bprm.p,0);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!bprm.p) <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    retval = -E2BIG; <br>
+    &nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp; if(retval&gt;=0)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; retval = search_binary_handler(&amp;bprm,regs);<br>
+    &nbsp;&nbsp;&nbsp; if(retval&gt;=0) /* execve success */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return retval;<br>
+    &nbsp;&nbsp;&nbsp; /* Something went wrong, return the inode and free the argument pages*/<br>
+    &nbsp;&nbsp;&nbsp; if(!bprm.dont_iput) <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; iput(bprm.inode);<br>
+    &nbsp;&nbsp;&nbsp; for (i=0 ; i&lt;MAX_ARG_PAGES ; i++)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; free_page(bprm.page[i]); <br>
+    &nbsp;&nbsp;&nbsp; return(retval);</font></strong><font FACE="宋体" size="3"></p>
+    </font><font FACE="宋体" COLOR="#007f00" size="4"><p></font><font FACE="宋体" size="4"><font color="#008080"><strong>}</strong></font></p>
+    </font><font FACE="宋体" SIZE="2" COLOR="#7f0000"><p></font><strong><font face="宋体" size="5" color="#000000">&nbsp;&nbsp;&nbsp;&nbsp; </font><font face="宋体" color="#000000" size="4">如上面的原代码所示：sys_execve 
+    的执行将会被转为函数 do_execve 的执行，此函数共需要 4 个参数：filename, 
+    argv,envp,regs.其中filename为所要执行程序的文件名，它必须是一个有效的用户可执行的程序文件，并使该可执行程序有正确的内容。<br>
+    &nbsp;&nbsp;&nbsp;&nbsp; 程序中用到一个重要的数据结构：linux_binprm,此结构在 
+    linux/include/linux/binfmts.h 中有定义如下：</font></strong><font FACE="宋体" SIZE="2" COLOR="#7f0000"></p>
+    </font><p>　<img src="dot2.jpg" alt="dot2.bmp (406 bytes)" WIDTH="10" HEIGHT="11"> <font color="#0080C0" face="宋体"><strong><em><big>linux_binprm 结构：</big><br>
+    </em></strong></font><br>
+    <font FACE="宋体" SIZE="2">/*This structure is used to hold the arguments that are used 
+    when loading binaries.&nbsp;&nbsp; */</font><br>
+    <font FACE="宋体" size="3">struct linux_binprm{<br>
+    &nbsp;&nbsp;&nbsp; char buf[128];<br>
+    &nbsp;&nbsp;&nbsp; unsigned long page[MAX_ARG_PAGES];<br>
+    &nbsp;&nbsp;&nbsp; unsigned long p;<br>
+    &nbsp;&nbsp;&nbsp; int sh_bang;<br>
+    &nbsp;&nbsp;&nbsp; struct inode * inode;<br>
+    &nbsp;&nbsp;&nbsp; int e_uid, e_gid;<br>
+    &nbsp;&nbsp;&nbsp; int argc, envc;<br>
+    &nbsp;&nbsp;&nbsp; char * filename; /* Name of binary */<br>
+    &nbsp;&nbsp;&nbsp; unsigned long loader, exec;<br>
+    &nbsp;&nbsp;&nbsp; int dont_iput; /* binfmt handler has put inode */<br>
+    };</font></p>
+    <font FACE="宋体" SIZE="3" COLOR="#007f00"><p>　</p>
+    <p></font><font color="#000000"><font FACE="宋体" size="3">/*<br>
+    </font><font FACE="宋体" SIZE="2">* </font><font FACE="宋体" size="3">MAX_ARG_PAGES 
+    规定了设定或保存运行程序的参数和框架（或者叫“外壳”）而必 * 
+    须得到的内存页的数量。32 个应该是足够的。<br>
+    *</font><font FACE="宋体" SIZE="2">/<br>
+    </font></font><font FACE="宋体" color="#000000" size="3">#define MAX_ARG_PAGES 32</font><font FACE="宋体" SIZE="2" COLOR="#007f00"></p>
+    </font><font FACE="宋体" SIZE="3" COLOR="#007f00"><p><img src="dot2.jpg" alt="dot2.bmp (278 bytes)" WIDTH="10" HEIGHT="11"></font><em><strong><font FACE="宋体" SIZE="3" color="#0080FF"> 
+    </font><font FACE="宋体" color="#0080C0" size="4">pt_regs 结构：</font></strong></em><br>
+    <font FACE="宋体" SIZE="3" COLOR="#007f00"><br>
+    /* this info is in file linux/include/asm/ptrace.h */</font><br>
+    <font FACE="宋体" SIZE="2">/* this struct defines the way the registers are stored on 
+    the <br>
+    &nbsp;&nbsp; stack during a system call. */<br>
+    <br>
+    struct pt_regs {<br>
+    &nbsp;&nbsp;&nbsp; long ebx;<br>
+    &nbsp;&nbsp;&nbsp; long ecx;<br>
+    &nbsp;&nbsp;&nbsp; long edx;<br>
+    &nbsp;&nbsp;&nbsp; long esi;<br>
+    &nbsp;&nbsp;&nbsp; long edi;<br>
+    &nbsp;&nbsp;&nbsp; long ebp;<br>
+    &nbsp;&nbsp;&nbsp; long eax;<br>
+    &nbsp;&nbsp;&nbsp; unsigned short ds, __dsu;<br>
+    &nbsp;&nbsp;&nbsp; unsigned short es, __esu;<br>
+    &nbsp;&nbsp;&nbsp; unsigned short fs, __fsu;<br>
+    &nbsp;&nbsp;&nbsp; unsigned short gs, __gsu;<br>
+    &nbsp;&nbsp;&nbsp; long orig_eax;&nbsp;&nbsp;&nbsp; <br>
+    &nbsp;&nbsp;&nbsp; long eip;<br>
+    &nbsp;&nbsp;&nbsp; unsigned short cs, __csu;<br>
+    &nbsp;&nbsp;&nbsp; long eflags;<br>
+    &nbsp;&nbsp;&nbsp; long esp;<br>
+    &nbsp;&nbsp;&nbsp; unsigned short ss, __ssu;<br>
+    };</p>
+    <p></font><font FACE="宋体" size="3"><img src="dot2.jpg" alt="dot2.bmp (278 bytes)" WIDTH="10" HEIGHT="11"> </font><font FACE="宋体" color="#0080C0" size="4"><em><strong>函数 open_namei():</strong></em></font><font FACE="宋体" size="3"></p>
+    <p></font><font FACE="宋体" SIZE="2">/*this function is in file linux/fs/namei.c */</p>
+    </font><blockquote>
+      <font FACE="宋体" SIZE="2"><blockquote>
+        <p><br>
+        * open_namei()<br>
+        *<br>
+        * namei for open - this is in fact almost the whole open-routine.<br>
+        *<br>
+        * Note that the low bits of &quot;flag&quot; aren't the same as in the open<br>
+        * system call - they are 00 - no permissions needed<br>
+        * 01 - read permission needed<br>
+        * 10 - write permission needed<br>
+        * 11 - read/write permissions needed<br>
+        * which is a lot more logical, and also allows the &quot;no perm&quot; needed<br>
+        * for symlinks (where the permissions are checked later).&nbsp; */<br>
+        int open_namei(const char * pathname, int flag, int mode, struct inode ** res_inode, 
+        struct inode * base)<br>
+        {<br>
+        <em>const char * basename;<br>
+        int namelen,error;<br>
+        &nbsp;&nbsp;&nbsp; struct inode * dir, *inode;<br>
+        &nbsp;&nbsp;&nbsp; mode &amp;= S_IALLUGO &amp; ~current-&gt;fs-&gt;umask;<br>
+        &nbsp;&nbsp;&nbsp; mode |= S_IFREG;<br>
+        &nbsp;&nbsp;&nbsp; error = dir_namei(pathname, &amp;namelen, &amp;basename, base, 
+        &amp;dir);<br>
+        &nbsp;&nbsp;&nbsp; if (error)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return error;<br>
+        &nbsp;&nbsp;&nbsp; if (!namelen) { /* special case: '/usr/' etc */<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (flag &amp; 2) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(dir);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EISDIR;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; /* thanks to Paul Pluzhnikov for noticing this was missing.. */<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if ((error = permission(dir,ACC_MODE(flag))) != 
+        0) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(dir);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return error; 
+        &nbsp;&nbsp;&nbsp; <br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *res_inode=dir;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return 0;<br>
+        &nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; dir-&gt;i_count++; /* lookup eats the dir */<br>
+        &nbsp;&nbsp;&nbsp; if (flag &amp; O_CREAT) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        down(&amp;dir-&gt;i_sem);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; error = lookup(dir, 
+        basename, namelen, &amp;inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!error) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        if (flag &amp; O_EXCL) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        error = -EEXIST;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; else if 
+        (IS_RDONLY(dir))<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; error = -EROFS;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; else if (!dir-&gt;i_op 
+        || !dir-&gt;i_op-&gt;create)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; error = -EACCES;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; else if ((error = 
+        permission(dir,MAY_WRITE | MAY_EXEC)) != 0)<br>
+        &nbsp;&nbsp;&nbsp; &nbsp;&nbsp; <font FACE="宋体" size="4">&nbsp;&nbsp;&nbsp; </font>; 
+        /* error is already set! */<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; else {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        dir-&gt;i_count++; /* create eats the dir */<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        if (dir-&gt;i_sb &amp;&amp; dir-&gt;i_sb-&gt;dq_op)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        dir-&gt;i_sb-&gt;dq_op-&gt;initialize(dir, -1);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        error = dir-&gt;i_op-&gt;create(dir, basename, namelen, mode, res_inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        up(&amp;dir-&gt;i_sem);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        iput(dir);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        return error;&nbsp;&nbsp;&nbsp;&nbsp; <br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; up(&amp;dir-&gt;i_sem);<br>
+        &nbsp;&nbsp;&nbsp; } <br>
+        &nbsp;&nbsp;&nbsp; else&nbsp;&nbsp;&nbsp; <br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; error = lookup(dir, basename, namelen, &amp;inode);<br>
+        &nbsp;&nbsp;&nbsp; if (error) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(dir);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return error;<br>
+        &nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; error = follow_link(dir,inode,flag,mode,&amp;inode);<br>
+        &nbsp;&nbsp;&nbsp; if (error)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return error;<br>
+        &nbsp;&nbsp;&nbsp; if (S_ISDIR(inode-&gt;i_mode) &amp;&amp; (flag &amp; 2)) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EISDIR;<br>
+        &nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; if ((error = permission(inode,ACC_MODE(flag))) != 0) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return error;<br>
+        &nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; if (S_ISFIFO(inode-&gt;i_mode) || S_ISSOCK(inode-&gt;i_mode)) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /*<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        *Allow opens of Unix domain sockets and FIFOs for write on<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        * read-only filesystems. Their data does not live on the disk.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        *<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        * If there was something like IS_NODEV(inode) for<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        * pipes and/or sockets I'd check it here.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        */<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; flag 
+        &amp;= ~O_TRUNC;<br>
+        &nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; else if (S_ISBLK(inode-&gt;i_mode) || S_ISCHR(inode-&gt;i_mode)) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (IS_NODEV(inode)) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        return -EACCES;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }&nbsp;&nbsp;&nbsp; <br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; flag &amp;= ~O_TRUNC;<br>
+        &nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp; else {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (IS_RDONLY(inode) &amp;&amp; (flag &amp; 2)) 
+        {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EROFS;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        &nbsp; }</em></p>
+        <p><em>/*<br>
+        * An append-only file must be opened in append mode for writing<br>
+        * Additionally, we must disallow O_TRUNC -- cevans<br>
+        */<br>
+        if (IS_APPEND(inode) &amp;&amp; (((flag &amp; FMODE_WRITE) &amp;&amp; !(flag &amp; 
+        O_APPEND)) || (flag &amp; O_TRUNC))) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EPERM;<br>
+        }if (flag &amp; O_TRUNC) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if ((error = get_write_access(inode))) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        return error;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        /*<br>
+        * Refuse to truncate files with mandatory locks held on them<br>
+        */<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; error = locks_verify_locked(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (error) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return error;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_sb &amp;&amp; 
+        inode-&gt;i_sb-&gt;dq_op)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; inode-&gt;i_sb-&gt;dq_op-&gt;initialize(inode, 
+        -1);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; error = do_truncate(inode, 0);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; put_write_access(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (error) {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        iput(inode);<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        return error;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+        } else<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (flag &amp; FMODE_WRITE)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_sb 
+        &amp;&amp; inode-&gt;i_sb-&gt;dq_op)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+        inode-&gt;i_sb-&gt;dq_op-&gt;initialize(inode, -1);<br>
+        *res_inode = inode;<br>
+        return 0;</em><br>
+        }</p>
+      </blockquote>
+      </font>
+    </blockquote>
+    <font FACE="宋体" SIZE="3" COLOR="#7f0000"><p><img src="dot2.jpg" alt="dot2.bmp (278 bytes)" WIDTH="10" HEIGHT="11"> </font><font FACE="宋体" color="#0080C0" size="4"><em><strong>函数prepare_binprm()：</strong></em></font><font FACE="宋体" SIZE="3" COLOR="#7f0000"></p>
+    <p>/* this function is in file linux/fs/exec.c */</font><br>
+    <font FACE="宋体" SIZE="2">/* <br>
+    * 从 inode 中得到信息填充到 binprm 结构中。<br>
+    * 检查文件是否可执行，然后读出开头的 512 bytes<br>
+    */<br>
+    int prepare_binprm(struct linux_binprm *bprm)<br>
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; int mode;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; int retval,id_change;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; mode = bprm-&gt;inode-&gt;i_mode;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!S_ISREG(mode)) /* must be regular file */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EACCES;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!(mode &amp; 0111)) /* with at least _one_ 
+    execute bit set */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EACCES;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (IS_NOEXEC(bprm-&gt;inode)) /* FS mustn't be 
+    mounted noexec */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EACCES;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!bprm-&gt;inode-&gt;i_sb)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -EACCES;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if ((retval = permission(bprm-&gt;inode, 
+    MAY_EXEC)) != 0)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return retval;<br>
+    /* better not execute files which are being written to */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (bprm-&gt;inode-&gt;i_writecount &gt; 0)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return -ETXTBSY;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; bprm-&gt;e_uid = current-&gt;euid;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; bprm-&gt;e_gid = current-&gt;egid;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; id_change = 0;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* Set-uid? */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (mode &amp; S_ISUID) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;e_uid = bprm-&gt;inode-&gt;i_uid;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (bprm-&gt;e_uid != current-&gt;euid)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    id_change = 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* Set-gid? */<br>
+    /*<br>
+    * If setgid is set but no group execute bit then this<br>
+    * is a candidate for mandatory locking, not a setgid<br>
+    * executable.<br>
+    */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if ((mode &amp; (S_ISGID | S_IXGRP)) == 
+    (S_ISGID | S_IXGRP)) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;e_gid = bprm-&gt;inode-&gt;i_gid;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (!in_group_p(bprm-&gt;e_gid))<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    id_change = 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }&nbsp;&nbsp;&nbsp; <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (id_change) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* We can't 
+    suid-execute if we're sharing parts of the executable */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* or if we're being 
+    traced (or if suid execs are not allowed) */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* 
+    (current-&gt;mm-&gt;count &gt; 1 is ok, as we'll get a new mm anyway) */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (IS_NOSUID(bprm-&gt;inode)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    ` &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; || (current-&gt;flags &amp; 
+    PF_PTRACED)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    || (current-&gt;fs-&gt;count &gt; 1)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    || (current-&gt;sig-&gt;count &gt; 1)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    || (current-&gt;files-&gt;count &gt; 1)) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (!suser())<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return -EPERM;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; memset(bprm-&gt;buf,0,sizeof(bprm-&gt;buf));<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return 
+    read_exec(bprm-&gt;inode,0,bprm-&gt;buf,128,1);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </font><font FACE="宋体" size="3">/* 
+    读入可执行文件的头 128 个 byte 到 bprm-&gt;buf 中 */<br>
+    }</font><font FACE="宋体" SIZE="2"><br>
+    &nbsp;&nbsp; <br>
+    </font><font FACE="宋体" size="3">&nbsp; ///* 其中，read_exec()函数中有如下语句：<br>
+    &nbsp;&nbsp;&nbsp; / *&nbsp; read_exec(struct inode *inode, ...)<br>
+    &nbsp;&nbsp;&nbsp; / *&nbsp; ......<br>
+    &nbsp;&nbsp;&nbsp; / *&nbsp; file.f_inode = inode;<br>
+    &nbsp;&nbsp;&nbsp; / *&nbsp; .......<br>
+    &nbsp;&nbsp;&nbsp; / *&nbsp; result = file.f_op-&gt;read(inode, &amp;file, addr, count);<br>
+    &nbsp;&nbsp;&nbsp; / *&nbsp; .......<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; */</font><font FACE="宋体" SIZE="2"></p>
+    </font><font face="宋体" size="2" color="#ff0000"><p><img src="dot2.jpg" alt="dot2.bmp (278 bytes)" WIDTH="10" HEIGHT="11"> </font><font FACE="宋体" color="#0080C0" size="4"><em><strong>函数 
+    copy_string():</strong></em></font><font FACE="宋体" SIZE="2"></p>
+    <p><font face="宋体" size="2" color="#ff0000">/* this is in file linux/fs/exec.c */</font></p>
+    <p>/*<br>
+    * 'copy_string()' copies argument/envelope strings from user<br>
+    * memory to free pages in kernel mem. These are in a format ready<br>
+    * to be put directly into the top of new user memory.<br>
+    *<br>
+    * Modified by TYT, 11/24/91 to add the from_kmem argument, which specifies<br>
+    * whether the string and the string array are from user or kernel segments:<br>
+    * from_kmem argv * argv <br>
+    *<br>
+    * 0 user space user space<br>
+    * 1 kernel space user space<br>
+    * 2 kernel space kernel space<br>
+    * <br>
+    * We do this by playing games with the fs segment register. Since it<br>
+    * is expensive to load a segment register, we try to avoid calling<br>
+    * set_fs() unless we absolutely have to.<br>
+    */</p>
+    <p>/*<br>
+    * cycle the list of binary formats handler, until one recognizes the image<br>
+    */<br>
+    int search_binary_handler(struct linux_binprm *bprm,struct pt_regs *regs)<br>
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; int try,retval=0;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; struct linux_binfmt *fmt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #ifdef __alpha__<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* handle /sbin/loader.. */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    struct exec * eh = (struct exec *) bprm-&gt;buf;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (!bprm-&gt;loader &amp;&amp; eh-&gt;fh.f_magic == 0x183 &amp;&amp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    (eh-&gt;fh.f_flags &amp; 0x3000) == 0x3000)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    char * dynloader[] = { &quot;/sbin/loader&quot; };<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    iput(bprm-&gt;inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;dont_iput = 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    remove_arg_zero(bprm);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;p = copy_strings(1, dynloader, bprm-&gt;page, bprm-&gt;p,2);bprm-&gt;argc++;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;loader = bprm-&gt;p;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    retval = open_namei(dynloader[0], 0, 0, &amp;bprm-&gt;inode, NULL);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (retval)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return retval;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;dont_iput = 0;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    retval = prepare_binprm(bprm);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (retval&lt;0)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return retval;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    /* should call search_binary_handler recursively here,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    but it does not matter */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #endif<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; for (try=0; try&lt;2; try++) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; for (fmt = formats ; fmt ; fmt = fmt-&gt;next) 
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    int (*fn)(struct linux_binprm *, struct pt_regs *) = fmt-&gt;load_binary;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (!fn)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    continue;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    retval = fn(bprm, regs);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (retval &gt;= 0) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if(!bprm-&gt;dont_iput)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    iput(bprm-&gt;inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    bprm-&gt;dont_iput=1; &nbsp;&nbsp;&nbsp; <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    current-&gt;did_exec = 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return retval;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (retval != -ENOEXEC)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    break;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (bprm-&gt;dont_iput) /* We don't have the inode anymore*/<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return retval;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (retval != -ENOEXEC) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; break;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #ifdef CONFIG_KERNELD<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #define printable(c) 
+    (((c)=='\t') || ((c)=='\n') || (0x20&lt;=(c) &amp;&amp; (c)&lt;=0x7e))<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    char modname[20];<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (printable(bprm-&gt;buf[0]) &amp;&amp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    printable(bprm-&gt;buf[1]) &amp;&amp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    printable(bprm-&gt;buf[2]) &amp;&amp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    printable(bprm-&gt;buf[3]))<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    break; /* -ENOEXEC */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    sprintf(modname, &quot;binfmt-%hd&quot;, *(short*)(&amp;bprm-&gt;buf));<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    request_module(modname);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    #endif<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp; return retval;<br>
+    }</p>
+    </font><font face="宋体" size="2" color="#ff0000"><p>/* In the file linux/fs/inode.c */</font><font FACE="宋体" SIZE="2"></p>
+    <p>void iput(struct inode * inode)<br>
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!inode)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; wait_on_inode(inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!inode-&gt;i_count) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; printk(&quot;VFS: iput: 
+    trying to free free inode\n&quot;);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; printk(&quot;VFS: 
+    device %s, inode %lu, mode=0%07o\n&quot;,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    kdevname(inode-&gt;i_rdev), inode-&gt;i_ino, inode-&gt;i_mode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_pipe)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; wake_up_interruptible(&amp;PIPE_WAIT(*inode));<br>
+    repeat:<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_count&gt;1) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    inode-&gt;i_count--;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; wake_up(&amp;inode_wait);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_pipe) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    unsigned long page = (unsigned long) PIPE_BASE(*inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    PIPE_BASE(*inode) = NULL;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    free_page(page);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_sb &amp;&amp; 
+    inode-&gt;i_sb-&gt;s_op &amp;&amp; inode-&gt;i_sb-&gt;s_op-&gt;put_inode) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    inode-&gt;i_sb-&gt;s_op-&gt;put_inode(inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (!inode-&gt;i_nlink)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_dirt) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    write_inode(inode); /* we can sleep - so do again */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    wait_on_inode(inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    goto repeat;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (IS_WRITABLE(inode)) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (inode-&gt;i_sb &amp;&amp; inode-&gt;i_sb-&gt;dq_op) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    /* Here we can sleep also. Let's do it again<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    * Dmitry Gorodchanin 02/11/96 <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    inode-&gt;i_lock = 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    inode-&gt;i_sb-&gt;dq_op-&gt;drop(inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    unlock_inode(inode);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    goto repeat;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; inode-&gt;i_count--;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_count)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /*<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; * Huoh, we were 
+    supposed to be the last user, but someone has<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; * grabbed it while we 
+    were sleeping. Dont destroy inode VM<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; * mappings, it might 
+    cause a memory leak.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; */<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (inode-&gt;i_mmap) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; printk(&quot;iput: 
+    inode %lu on device %s still has mappings.\n&quot;,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; inode-&gt;i_ino, 
+    kdevname(inode-&gt;i_dev));<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; inode-&gt;i_mmap = 
+    NULL;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; nr_free_inodes++;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return;<br>
+    }</p>
+    <p>　</p>
+    <p>#define free_page(addr) free_pages((addr),0) </font><font face="宋体" size="2" color="#ff0000">/* In file linux/include/linux/mm.h */</p>
+    <p>/* In file linux/mm/page_alloc.c */</font><br>
+    <font FACE="宋体" SIZE="2">/*<br>
+    * Free_page() adds the page to the free lists. This is optimized for<br>
+    * fast normal cases (no error jumps taken normally).<br>
+    *<br>
+    * The way to optimize jumps for gcc-2.2.2 is to:<br>
+    * - select the &quot;normal&quot; case and put it inside the if () { XXX }<br>
+    * - no else-statements if you can avoid them<br>
+    *<br>
+    * With the above two rules, you get a straight-line execution path<br>
+    * for the normal case, giving better asm-code.<br>
+    *<br>
+    * free_page() may sleep since the page being freed may be a buffer<br>
+    * page or present in the swap cache. It will not sleep, however,<br>
+    * for a freshly allocated page (get_free_page()).<br>
+    */<br>
+    /*<br>
+    * Buddy system. Hairy. You really aren't expected to understand this<br>
+    *<br>
+    * Hint: -mask = 1+~mask<br>
+    */<br>
+    static inline void free_pages_ok(unsigned long map_nr, unsigned long order)<br>
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; struct free_area_struct *area = free_area + 
+    order;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; unsigned long index = map_nr &gt;&gt; (1 + 
+    order);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; unsigned long mask = (~0UL) &lt;&lt; order;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; unsigned long flags;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; save_flags(flags);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; cli();<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #define list(x) (mem_map+(x))<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; map_nr &amp;= mask;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; nr_free_pages -= mask;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; while (mask + (1 &lt;&lt; (NR_MEM_LISTS-1))) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (!change_bit(index, area-&gt;map))<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    break;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    remove_mem_queue(list(map_nr ^ -mask));<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    mask &lt;&lt;= 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    area++;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    index &gt;&gt;= 1;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    map_nr &amp;= mask;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; add_mem_queue(area, list(map_nr));<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; #undef list<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; restore_flags(flags);<br>
+    }</p>
+    <p>void __free_page(struct page *page)<br>
+    {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (!PageReserved(page) &amp;&amp; 
+    atomic_dec_and_test(&amp;page-&gt;count)) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    unsigned long map_nr = page-&gt;map_nr;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    delete_from_swap_cache(map_nr);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    free_pages_ok(map_nr, 0);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }</p>
+    <p>}</p>
+    <p>void free_pages(unsigned long addr, unsigned long order)<br>
+    {<br>
+    <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; unsigned long map_nr = MAP_NR(addr);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if (map_nr &lt; MAP_NR(high_memory)) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    mem_map_t * map = mem_map + map_nr;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (PageReserved(map))<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    if (atomic_dec_and_test(&amp;map-&gt;count)) {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    delete_from_swap_cache(map_nr);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    free_pages_ok(map_nr, order);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    }<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }</p>
+    <p>}</font><font FACE="宋体" SIZE="7" COLOR="#007f00"></p>
+    <p></font>　</p>
+    <font face="隶书" size="5"><p>四 后记<br>
+    <font face="宋体" size="3"><p>
+    &nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;限于时间关系及作者水平,本实验报告仅对EXECVE系统调用进行了比较粗浅地分析 ,有很多代码都没能作更深一步的研究,深表遗憾.尽管如此,我还是感到获益匪浅,希望以后有机会作进一步的学习.
+     <font face="隶书" size="2"><p>
+   <br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;一九九九年一月十六日 </p>
+    <p><strong>
+    </font>
+  </blockquote>
+  <blockquote>
+    <blockquote>
+      <blockquote>
+        <ul>
+          
+        </ul>
+      </blockquote>
+    </blockquote>
+  </blockquote>
+</blockquote>
+</body>
+</html>

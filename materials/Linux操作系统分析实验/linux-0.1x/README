@@ -1,0 +1,26 @@
+# This a root file system for linux 0.1x kernels.
+#
+# Rebuild from materials gathered from Internet.
+#
+# 2004.1.4 by Zhao Jiong ( gohigh@sh163.net )
+#
+# http://oldlinux.org/
+
+
+Now, this is a very basic root file system for linux 0.1x.
+I wll add more things to this release soon.
+
+This release can only do little things. you can test vi, ls,
+mkdir etc. Just for testing with kernel source code.
+
+NOTE:
+When using, please change your machince clock back to 19xx.
+Because the kernel don't support 2k time.
+
+The system will panic unpredicatablly. Use at your own risk!
+
+~
+~
+~
+:wq
+#
