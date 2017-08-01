@@ -1,0 +1,27 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: test3_1 - Win32 Debug--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\DOCUME~1\ADMINI~1\LOCALS~1\Temp\RSP3E.tmp" with contents
+[
+/nologo /MLd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /Fp"Debug/test3_1.pch" /YX /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"E:\CODE\C++\编译实验\test3_1\LL(1)_1.CPP"
+]
+Creating command line "cl.exe @C:\DOCUME~1\ADMINI~1\LOCALS~1\Temp\RSP3E.tmp" 
+<h3>Output Window</h3>
+Compiling...
+LL(1)_1.CPP
+e:\code\c++\编译实验\test3_1\ll(1)_1.cpp(55) : error C2137: empty character constant
+执行 cl.exe 时出错.
+
+
+
+<h3>Results</h3>
+LL(1)_1.OBJ - 1 error(s), 0 warning(s)
+</pre>
+</body>
+</html>

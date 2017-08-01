@@ -1,0 +1,26 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: E2 - Win32 Debug--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\DOCUME~1\ADMINI~1\LOCALS~1\Temp\RSP122.tmp" with contents
+[
+/nologo /MLd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /Fp"Debug/E2.pch" /YX /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"E:\教学文件\课程文档\编译原理\实验\03级\实验二参考代码1\2\E2\Y2.CPP"
+]
+Creating command line "cl.exe @C:\DOCUME~1\ADMINI~1\LOCALS~1\Temp\RSP122.tmp" 
+<h3>Output Window</h3>
+Compiling...
+Y2.CPP
+E:\教学文件\课程文档\编译原理\实验\03级\实验二参考代码1\2\E2\Y2.CPP(75) : warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+
+
+
+<h3>Results</h3>
+Y2.OBJ - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>
